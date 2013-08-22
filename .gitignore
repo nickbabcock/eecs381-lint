@@ -1,0 +1,6 @@
+test
+*.o
+*.a
+vera/build
+gtest/make/sample1_unittest
+
