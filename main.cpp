@@ -85,6 +85,12 @@ TEST(meBeforeYou, fails)
 	EXPECT_EQ(1, meBeforeYou(code));
 }
 
+TEST(meBeforeYou, fieldTest)
+{
+	const char* code = R"(#include "problem1.h")";
+	EXPECT_EQ(0, meBeforeYou(code));
+}
+
 TEST(nullComparison, works)
 {
 	const char * code = R"( if (!f) { })";
