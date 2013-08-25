@@ -5,6 +5,6 @@ foreach file [getSourceFileNames] {
 	set theirLast [lindex [lindex [getTokens $file 1 0 -1 -1 {pp_hheader}] 0] 1]
 
 	if {$mylast > $theirLast} {
-		report $file $theirLast "project specific includes must occur others"
+		report $file $theirLast "project specific includes must occur before others"
 	}
 }
