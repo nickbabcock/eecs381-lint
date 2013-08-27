@@ -139,6 +139,12 @@ TEST(constNames, leadingK)
     EXPECT_EQ(0, constNames(code));
 }
 
+TEST(constNames, customType)
+{
+	const char* code = R"(const MyType_t yup_c = 10;)";
+	EXPECT_EQ(0, constNames(code));
+}
+
 TEST(constNames, trailingE)
 {
     const char* code = R"(const int screen_h_size_c = 1024;)";
