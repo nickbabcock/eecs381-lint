@@ -1,17 +1,17 @@
 set rules {
-	capitalizeMacros
-	constNames
-	disallowedFunctions
-	enumDefaultValues
-	enumName
-	enumValueName
-	float
-	leadingUnderscore
-	meBeforeYou
-	noTrueFalse
-	nullComparison
-	stringLiterals
-	typedefName
-	unsigned
-	upperCaseDefinitions	
+    capitalizeMacros
+    constNames
+    disallowedFunctions
+    enumDefaultValues
+    enumName
+    enumValueName
+    float
+    leadingUnderscore
+    meBeforeYou
+    noTrueFalse
+    nullComparison
+    stringLiterals
+    typedefName
+    unsigned
+    upperCaseDefinitions    
 }
