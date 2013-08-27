@@ -187,6 +187,12 @@ TEST(typedefName, works)
 	EXPECT_EQ(0, typedefName(code));
 }
 
+TEST(typedefName, reassignInt)
+{
+	const char* code = R"(typedef unsigned int Integral_base_t;)";
+	EXPECT_EQ(0, typedefName(code));
+}
+
 TEST(typedefName, fails)
 {
 	const char* code = R"(typedef struct Thing * Thing_ptr)";
