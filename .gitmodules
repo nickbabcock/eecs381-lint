@@ -1,6 +1,6 @@
 [submodule "gtest"]
 	path = gtest
-	url = git://github.com/smarr/googletest.git
+	url = https://github.com/cpp-netlib/gtest.git
 [submodule "vera"]
 	path = vera
 	url = https://bitbucket.org/verateam/vera.git
