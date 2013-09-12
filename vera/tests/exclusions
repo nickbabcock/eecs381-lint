@@ -1,3 +1,0 @@
-set ruleExclusions(T014) {
-   L004.cpp
-}

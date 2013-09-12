@@ -1,0 +1,6 @@
+[submodule "gtest"]
+	path = gtest
+	url = git://github.com/smarr/googletest.git
+[submodule "vera"]
+	path = vera
+	url = https://bitbucket.org/verateam/vera.git

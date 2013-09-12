@@ -1,3 +1,0 @@
-set ruleExclusions(T013) {
-  test.cpp
-}
