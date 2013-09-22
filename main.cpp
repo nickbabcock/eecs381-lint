@@ -109,6 +109,12 @@ TEST(nullComparison, failsWithNull)
     EXPECT_EQ(1, nullComparison(code));
 }
 
+TEST(nullComparison, fineWithReturns)
+{
+    const char * code = R"(case 'q': if (a == 'q') return 0; )";
+    EXPECT_EQ(0, nullComparison(code));
+}
+
 TEST(noTrueFalse, failTrue)
 {
     const char * code = R"(#define TRUE 1)";
