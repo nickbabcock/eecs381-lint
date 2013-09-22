@@ -259,6 +259,12 @@ TEST(stringLiterals, works)
     EXPECT_EQ(0, initializeStringLiteral(code));
 }
 
+TEST(stringLiterals, buffersAreFine)
+{
+    const char* code = R"(char buffer[10];)";
+    EXPECT_EQ(0, initializeStringLiteral(code));
+}
+
 TEST(enumDefaultValues, fails)
 {
     const char* code = R"(enum Fruit_e {APPLE = 0, ORANGE, PEAR, BANANA};)";
