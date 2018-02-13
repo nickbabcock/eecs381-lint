@@ -1,0 +1,11 @@
+; DO NOT EDIT (unless you know what you are doing)
+;
+; This subdirectory is a git "subrepo", and this file is maintained by the
+; git-subrepo command. See https://github.com/git-commands/git-subrepo#readme
+;
+[subrepo]
+	remote = http://llvm.org/git/clang-tools-extra.git
+	branch = master
+	commit = 782d254c7cf0f2916df00e89c93a6545b872e012
+	parent = d7da0892c5c7690abac60cab504930d1d3180b17
+	cmdver = 0.3.1
