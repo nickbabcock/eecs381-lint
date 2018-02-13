@@ -57,6 +57,11 @@ The improvements are...
 Improvements to clang-tidy
 --------------------------
 
+- New `misc-eecs-typedef-t
+  <http://clang.llvm.org/extra/clang-tidy/checks/misc-eecs-typedef-t.html>`_ check
+
+  FIXME: add release notes.
+
 - The 'misc-incorrect-roundings' check was renamed to `bugprone-incorrect-roundings
   <http://clang.llvm.org/extra/clang-tidy/checks/bugprone-incorrect-roundings.html>`_
 

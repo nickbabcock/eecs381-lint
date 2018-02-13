@@ -1,6 +1,7 @@
 set(LLVM_LINK_COMPONENTS support)
 
 add_clang_library(clangTidyMiscModule
+  EecsTypedefTCheck.cpp
   ForwardingReferenceOverloadCheck.cpp
   LambdaFunctionNameCheck.cpp
   MisplacedConstCheck.cpp
