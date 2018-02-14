@@ -1,36 +1,68 @@
-# EECS 381 Style Check
+# EECS 381 Lint
 
-Scripts for vera++ to verify correctness of style for C/C++ code
+Hello intrepid University of Michigan student!
 
-EECS 381 has a well defined style guidelines for [C][] and [C++][].  Some of the
-rules aren't the most intuitive and I won't be able to remember them while
-coding. This is the main reason behind this project; to have a series of style
-scripts to make sure my code is stylistically correct. By piggy backing off of
-vera++, I can use their engine and just write specific rules.
+You're taking EECS 381 - Object-Oriented and Advanced Programming and heard
+there are style guidelines for [C][] and [C++][]. Most of the guidelines make
+sense and are easy to keep in the back of your mind, but even I slip up and
+forget occasionally. This repo is here to help.
 
-## Installation
+By taking advantage of the [clang](https://en.wikipedia.org/wiki/Clang)
+compiler's deep knowledge of C/C++ files we can create robust patterns to match
+on code that isn't as error prone as regular expressions and tokenizing C code
+yourself. This repo adds checks to
+[`clang-tidy`](http://clang.llvm.org/extra/clang-tidy/) to run against your
+code.
 
-Resolving vera++ isn't the easiest of tasks but the following command solved it.
-Your mileage may vary.
+If you take away one thing from this repo -- even if you don't use this repo --
+use clang-tidy! 
+
+## Getting Started
+
+Writing plugins for clang-tidy, unfortunately means you need to compile the
+whole clang toolchain, which requires a relatively beefy machine (8GB RAM and
+5GB disk free). To make compilation reasonable, we're using the gold linker
+(which is in your development tools already if you are on a recent version of
+Ubuntu) and doing a release build so that all the debug symbols aren't included
+(which will take up 50GB+ of space)
 
 ```bash
-sudo apt-get install cmake tcl8.5 tcl8.5-dev tk8.5-dev libboost-all-dev
+git clone --recursive https://github.com/nickbabcock/eecs381-lint
+cd eecs381-lint
+
+# LLVM is large, so to keep all of the subprojects manageable, we recreate the mono-repo by linking clang and clang-tidy appropriately.
+ln -s clang-tools-extra clang/tools/extra
+ln -s clang llvm/tools/.
+mkdir -p eecs381-lint/build
+cd eecs381-lint/build
+cmake -G Ninja -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+               -DLLVM_PARALLEL_LINK_JOBS=1 \
+               -DLLVM_USE_LINKER=gold \
+               -DCMAKE_BUILD_TYPE=Release \
+               ../llvm
+
+ninja check-clang-tools
+# And now we wait awhile.
+# Our clang-tidy executable is in bin/clang-tidy
 ```
 
-After installing the prerequisites, clone this repo and run `make`.  vera++ will
-be in the folder vera/build/src.
+## History
 
-## Running
+The first implementation, written in 2013, was a plugin written for
+[vera++](https://bitbucket.org/verateam/vera/overview), which parses C/C++ code
+and hands tokens to Tcl scripts written by you.  As a first implementation this
+is fine, but I believe one is limited in the confidence of the solution as they
+aren't handed a deep and rich AST that can be interogated. It's a step above
+regular expressions, but still far from ideal. Tcl is also an odd choice -- not
+that it is the wrong choice, but in all my time this has been the only codebase
+that I've written Tcl and it didn't leave a great impression.
 
-for instance to run vera++ on `main.cpp` in the top level directory with the c
-profile execute the following command
-
-```bash
-./vera/build/src/vera++ --profile c main.cpp
-```
-
-This is not a good idea as there will be many errors as vera++ doesn't
-understand raw string literals.
+Maybe the best reason for migrating away from vera is that it's simply not as
+well supported as `clang-tidy`. The last commit for vera was in the first half
+of 2016. Clang tidy receives updates weekly if not daily. There is a difference
+between mature software that is stable and doesn't receive updates and projects
+where the maintainers have moved on. For instance, vera doesn't understand much
+of C++11 syntax, and thus will be confused when parsing modern C++ files.
 
 [C]: http://www.umich.edu/~eecs381/handouts/C_Coding_Standards.pdf
 [C++]: http://www.umich.edu/~eecs381/handouts/C++_Coding_Standards.pdf
