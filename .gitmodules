@@ -1,6 +1,3 @@
-[submodule "vera"]
-	path = vera
-	url = https://bitbucket.org/verateam/vera.git
 [submodule "llvm"]
 	path = llvm
 	url = http://llvm.org/git/llvm.git
