@@ -52,7 +52,7 @@ The first implementation, written in 2013, was a plugin written for
 [vera++](https://bitbucket.org/verateam/vera/overview), which parses C/C++ code
 and hands tokens to Tcl scripts written by you.  As a first implementation this
 is fine, but I believe one is limited in the confidence of the solution as they
-aren't handed a deep and rich AST that can be interogated. It's a step above
+aren't handed a deep and rich AST that can be interrogated. It's a step above
 regular expressions, but still far from ideal. Tcl is also an odd choice -- not
 that it is the wrong choice, but in all my time this has been the only codebase
 that I've written Tcl and it didn't leave a great impression.
@@ -66,3 +66,37 @@ of C++11 syntax, and thus will be confused when parsing modern C++ files.
 
 [C]: http://www.umich.edu/~eecs381/handouts/C_Coding_Standards.pdf
 [C++]: http://www.umich.edu/~eecs381/handouts/C++_Coding_Standards.pdf
+
+## Checks
+
+### Typedef end in `_t`
+
+```cpp
+struct Point {
+    int x;
+    int y;
+};
+
+typedef struct Point Point_t;
+
+typedef struct Point Pointed;
+
+typedef struct Thing {
+   int cheese;
+} Thing;
+
+typedef struct Book {
+   int author;
+} Book_t;
+```
+
+Results in the following errors:
+
+```
+misc-eecs-typedef-t.cpp:10:22: warning: typedefs must end in `_t` ('Pointed') [misc-eecs-typedef-t]
+typedef struct Point Pointed;
+                     ^
+misc-eecs-typedef-t.cpp:15:3: warning: typedefs must end in `_t` ('Thing') [misc-eecs-typedef-t]
+} Thing;
+  ^
+```
