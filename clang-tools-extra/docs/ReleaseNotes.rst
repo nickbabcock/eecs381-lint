@@ -57,6 +57,11 @@ The improvements are...
 Improvements to clang-tidy
 --------------------------
 
+- New `misc-eecs-bool-define
+  <http://clang.llvm.org/extra/clang-tidy/checks/misc-eecs-bool-define.html>`_ check
+
+  FIXME: add release notes.
+
 - New `misc-eecs-typedef-t
   <http://clang.llvm.org/extra/clang-tidy/checks/misc-eecs-typedef-t.html>`_ check
 
