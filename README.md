@@ -49,6 +49,8 @@ ninja check-clang-tools
 # Our clang-tidy executable is in bin/clang-tidy
 ```
 
+(For contributors): we use [git-subrepo](https://github.com/ingydotnet/git-subrepo) to manage our modifications to the `clang-tools-extra` repo.
+
 ## History
 
 The first implementation, written in 2013, was a plugin written for
