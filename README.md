@@ -100,3 +100,19 @@ misc-eecs-typedef-t.cpp:15:3: warning: typedefs must end in `_t` ('Thing') [misc
 } Thing;
   ^
 ```
+
+### Do not define `TRUE` or `FALSE`
+
+```c
+#define TRUE 1
+
+#define TODO 100
+```
+
+Results in the following errors:
+
+```
+misc-eecs-bool-define.cpp:1:9: warning: Do not define TRUE or FALSE macros: 'TRUE' [misc-eecs-bool-define]
+#define TRUE 1
+        ^
+```
