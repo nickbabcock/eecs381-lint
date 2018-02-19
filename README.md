@@ -14,6 +14,8 @@ yourself. This repo adds checks to
 [`clang-tidy`](http://clang.llvm.org/extra/clang-tidy/) to run against your
 code.
 
+There are only a couple lints implemented at the moment, so please check the style guide by hand as well as by using this tool.
+
 If you take away one thing from this repo -- even if you don't use this repo --
 use clang-tidy!
 
