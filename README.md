@@ -32,7 +32,8 @@ Ubuntu) and doing a release build so that all the debug symbols aren't included
 git clone --recursive https://github.com/nickbabcock/eecs381-lint
 cd eecs381-lint
 
-# LLVM is large, so to keep all of the subprojects manageable, we recreate the mono-repo by linking clang and clang-tidy appropriately.
+# LLVM is large, so to keep all of the subprojects manageable, we recreate the
+# mono-repo by linking clang and clang-tidy appropriately.
 ln -s clang-tools-extra clang/tools/extra
 ln -s clang llvm/tools/.
 mkdir -p eecs381-lint/build
