@@ -15,7 +15,7 @@ yourself. This repo adds checks to
 code.
 
 If you take away one thing from this repo -- even if you don't use this repo --
-use clang-tidy! 
+use clang-tidy!
 
 ## Getting Started
 
@@ -118,3 +118,5 @@ misc-eecs-bool-define.cpp:1:9: warning: Do not define TRUE or FALSE macros: 'TRU
 #define TRUE 1
         ^
 ```
+
+[Source code](clang-tools-extra/clang-tidy/misc/EecsBoolDefineCheck.cpp) / [Test file](clang-tools-extra/test/clang-tidy/misc-eecs-bool-define.cpp)
