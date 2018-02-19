@@ -101,6 +101,8 @@ misc-eecs-typedef-t.cpp:15:3: warning: typedefs must end in `_t` ('Thing') [misc
   ^
 ```
 
+[Source code](clang-tools-extra/clang-tidy/misc/EecsTypedefTCheck.cpp) / [Test file](clang-tools-extra/test/clang-tidy/misc-eecs-typedef-t.cpp)
+
 ### Do not define `TRUE` or `FALSE`
 
 ```c
