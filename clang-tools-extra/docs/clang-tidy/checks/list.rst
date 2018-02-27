@@ -127,6 +127,7 @@ Clang-Tidy Checks
    llvm-twine-local
    misc-definitions-in-headers
    misc-eecs-bool-define
+   misc-eecs-enum-suffix
    misc-forwarding-reference-overload
    misc-lambda-function-name
    misc-macro-parentheses

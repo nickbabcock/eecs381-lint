@@ -12,6 +12,7 @@
 #include "../ClangTidyModuleRegistry.h"
 #include "DefinitionsInHeadersCheck.h"
 #include "EecsBoolDefineCheck.h"
+#include "EecsEnumSuffixCheck.h"
 #include "EecsTypedefTCheck.h"
 #include "ForwardingReferenceOverloadCheck.h"
 #include "LambdaFunctionNameCheck.h"
@@ -50,6 +51,8 @@ public:
   void addCheckFactories(ClangTidyCheckFactories &CheckFactories) override {
     CheckFactories.registerCheck<EecsBoolDefineCheck>(
         "misc-eecs-bool-define");
+    CheckFactories.registerCheck<EecsEnumSuffixCheck>(
+        "misc-eecs-enum-suffix");
     CheckFactories.registerCheck<EecsTypedefTCheck>(
         "misc-eecs-typedef-t");
     CheckFactories.registerCheck<ForwardingReferenceOverloadCheck>(
