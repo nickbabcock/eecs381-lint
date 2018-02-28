@@ -125,3 +125,25 @@ misc-eecs-bool-define.cpp:1:9: warning: Do not define TRUE or FALSE macros: 'TRU
 ```
 
 [Source code](clang-tools-extra/clang-tidy/misc/EecsBoolDefineCheck.cpp) / [Test file](clang-tools-extra/test/clang-tidy/misc-eecs-bool-define.cpp)
+
+### Enums must end in "_e"
+
+```cpp
+enum X {
+  A, B, C
+};
+
+enum X_e {
+  AA, BB, CC
+};
+```
+
+Results in the following errors:
+
+```
+misc-eecs-enum-suffix.cpp:1:6: warning: enum declarations must end in `_e` ('X') [misc-eecs-enum-suffix]
+enum X {
+     ^
+```
+
+[Source code](clang-tools-extra/clang-tidy/misc/EecsEnumSuffixCheck.cpp) / [Test file](clang-tools-extra/test/clang-tidy/misc-eecs-enum-suffix.cpp)
