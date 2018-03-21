@@ -116,7 +116,7 @@ misc-eecs-typedef-t.cpp:15:3: warning: typedefs must end in `_t` ('Thing') [misc
 #define TODO 100
 ```
 
-Results in the following errors:
+Results in the following error:
 
 ```
 misc-eecs-bool-define.cpp:1:9: warning: Do not define TRUE or FALSE macros: 'TRUE' [misc-eecs-bool-define]
@@ -138,7 +138,7 @@ enum X_e {
 };
 ```
 
-Results in the following errors:
+Results in the following error:
 
 ```
 misc-eecs-enum-suffix.cpp:1:6: warning: enum declarations must end in `_e` ('X') [misc-eecs-enum-suffix]
@@ -147,3 +147,22 @@ enum X {
 ```
 
 [Source code](clang-tools-extra/clang-tidy/misc/EecsEnumSuffixCheck.cpp) / [Test file](clang-tools-extra/test/clang-tidy/misc-eecs-enum-suffix.cpp)
+
+### Enum vales must be uppercase
+
+```cpp
+enum Fruit_e {
+    APPLES,
+    bANANAS
+};
+```
+
+Results in the following error:
+
+```
+misc-eecs-enum-value-caps.cpp:5:5: warning: enum values must be uppercased ('bANANAS') [misc-eecs-enum-value-caps]
+    bANANAS
+    ^
+```
+
+[Source code](clang-tools-extra/clang-tidy/misc/EecsEnumValueCapsCheck.cpp) / [Test file](clang-tools-extra/test/clang-tidy/misc-eecs-enum-value-caps.cpp)
