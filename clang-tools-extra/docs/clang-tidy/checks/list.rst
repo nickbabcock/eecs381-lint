@@ -128,6 +128,7 @@ Clang-Tidy Checks
    misc-definitions-in-headers
    misc-eecs-bool-define
    misc-eecs-enum-suffix
+   misc-eecs-enum-value-caps
    misc-forwarding-reference-overload
    misc-lambda-function-name
    misc-macro-parentheses

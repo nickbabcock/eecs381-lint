@@ -13,6 +13,7 @@
 #include "DefinitionsInHeadersCheck.h"
 #include "EecsBoolDefineCheck.h"
 #include "EecsEnumSuffixCheck.h"
+#include "EecsEnumValueCapsCheck.h"
 #include "EecsTypedefTCheck.h"
 #include "ForwardingReferenceOverloadCheck.h"
 #include "LambdaFunctionNameCheck.h"
@@ -53,6 +54,8 @@ public:
         "misc-eecs-bool-define");
     CheckFactories.registerCheck<EecsEnumSuffixCheck>(
         "misc-eecs-enum-suffix");
+    CheckFactories.registerCheck<EecsEnumValueCapsCheck>(
+        "misc-eecs-enum-value-caps");
     CheckFactories.registerCheck<EecsTypedefTCheck>(
         "misc-eecs-typedef-t");
     CheckFactories.registerCheck<ForwardingReferenceOverloadCheck>(

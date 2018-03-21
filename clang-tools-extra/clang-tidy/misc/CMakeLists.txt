@@ -3,6 +3,7 @@ set(LLVM_LINK_COMPONENTS support)
 add_clang_library(clangTidyMiscModule
   EecsBoolDefineCheck.cpp
   EecsEnumSuffixCheck.cpp
+  EecsEnumValueCapsCheck.cpp
   EecsTypedefTCheck.cpp
   ForwardingReferenceOverloadCheck.cpp
   LambdaFunctionNameCheck.cpp

@@ -57,6 +57,11 @@ The improvements are...
 Improvements to clang-tidy
 --------------------------
 
+- New `misc-eecs-enum-value-caps
+  <http://clang.llvm.org/extra/clang-tidy/checks/misc-eecs-enum-value-caps.html>`_ check
+
+  FIXME: add release notes.
+
 - New `misc-eecs-enum-suffix
   <http://clang.llvm.org/extra/clang-tidy/checks/misc-eecs-enum-suffix.html>`_ check
 
