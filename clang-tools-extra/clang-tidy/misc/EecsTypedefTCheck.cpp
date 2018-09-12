@@ -23,7 +23,7 @@ void EecsTypedefTCheck::registerMatchers(MatchFinder *Finder) {
 
 void EecsTypedefTCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *MatchedDecl = Result.Nodes.getNodeAs<TypedefDecl>("x");
-  const SourceLocation loc = MatchedDecl->getLocStart();
+  const SourceLocation loc = MatchedDecl->getBeginLoc();
 
   if (loc.isInvalid() || loc.isMacroID()) {
     return;

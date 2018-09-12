@@ -23,7 +23,7 @@ void EecsEnumSuffixCheck::registerMatchers(MatchFinder *Finder) {
 
 void EecsEnumSuffixCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *MatchedDecl = Result.Nodes.getNodeAs<EnumDecl>("x");
-  const SourceLocation loc = MatchedDecl->getLocStart();
+  const SourceLocation loc = MatchedDecl->getBeginLoc();
 
   if (loc.isInvalid() || loc.isMacroID()) {
     return;

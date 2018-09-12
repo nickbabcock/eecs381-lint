@@ -24,7 +24,7 @@ void EecsEnumValueCapsCheck::registerMatchers(MatchFinder *Finder) {
 
 void EecsEnumValueCapsCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *MatchedDecl = Result.Nodes.getNodeAs<EnumConstantDecl>("x");
-  const SourceLocation loc = MatchedDecl->getLocStart();
+  const SourceLocation loc = MatchedDecl->getBeginLoc();
 
   if (loc.isInvalid() || loc.isMacroID()) {
     return;
