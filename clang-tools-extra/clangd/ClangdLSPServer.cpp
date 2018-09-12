@@ -5,17 +5,22 @@
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 
 #include "ClangdLSPServer.h"
+#include "Cancellation.h"
+#include "Diagnostics.h"
 #include "JSONRPCDispatcher.h"
 #include "SourceCode.h"
 #include "URI.h"
+#include "llvm/ADT/ScopeExit.h"
+#include "llvm/Support/Errc.h"
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/Path.h"
 
 using namespace clang::clangd;
 using namespace clang;
+using namespace llvm;
 
 namespace {
 
@@ -36,7 +41,7 @@ public:
           "Expect URI body to be an absolute path starting with '/': " + Body,
           llvm::inconvertibleErrorCode());
     Body = Body.ltrim('/');
-#ifdef LLVM_ON_WIN32
+#ifdef _WIN32
     constexpr char TestDir[] = "C:\\clangd-test";
 #else
     constexpr char TestDir[] = "/clangd-test";
@@ -58,68 +63,78 @@ public:
 static URISchemeRegistry::Add<TestScheme>
     X("test", "Test scheme for clangd lit tests.");
 
-TextEdit replacementToEdit(StringRef Code, const tooling::Replacement &R) {
-  Range ReplacementRange = {
-      offsetToPosition(Code, R.getOffset()),
-      offsetToPosition(Code, R.getOffset() + R.getLength())};
-  return {ReplacementRange, R.getReplacementText()};
+SymbolKindBitset defaultSymbolKinds() {
+  SymbolKindBitset Defaults;
+  for (size_t I = SymbolKindMin; I <= static_cast<size_t>(SymbolKind::Array);
+       ++I)
+    Defaults.set(I);
+  return Defaults;
 }
 
-std::vector<TextEdit>
-replacementsToEdits(StringRef Code,
-                    const std::vector<tooling::Replacement> &Replacements) {
-  // Turn the replacements into the format specified by the Language Server
-  // Protocol. Fuse them into one big JSON array.
-  std::vector<TextEdit> Edits;
-  for (const auto &R : Replacements)
-    Edits.push_back(replacementToEdit(Code, R));
-  return Edits;
+std::string NormalizeRequestID(const json::Value &ID) {
+  auto NormalizedID = parseNumberOrString(&ID);
+  assert(NormalizedID && "Was not able to parse request id.");
+  return std::move(*NormalizedID);
 }
-
-std::vector<TextEdit> replacementsToEdits(StringRef Code,
-                                          const tooling::Replacements &Repls) {
-  std::vector<TextEdit> Edits;
-  for (const auto &R : Repls)
-    Edits.push_back(replacementToEdit(Code, R));
-  return Edits;
-}
-
 } // namespace
 
 void ClangdLSPServer::onInitialize(InitializeParams &Params) {
-  reply(json::obj{
+  if (Params.initializationOptions)
+    applyConfiguration(*Params.initializationOptions);
+
+  if (Params.rootUri && *Params.rootUri)
+    Server.setRootPath(Params.rootUri->file());
+  else if (Params.rootPath && !Params.rootPath->empty())
+    Server.setRootPath(*Params.rootPath);
+
+  CCOpts.EnableSnippets =
+      Params.capabilities.textDocument.completion.completionItem.snippetSupport;
+  DiagOpts.EmbedFixesInDiagnostics =
+      Params.capabilities.textDocument.publishDiagnostics.clangdFixSupport;
+  DiagOpts.SendDiagnosticCategory =
+      Params.capabilities.textDocument.publishDiagnostics.categorySupport;
+
+  if (Params.capabilities.workspace && Params.capabilities.workspace->symbol &&
+      Params.capabilities.workspace->symbol->symbolKind) {
+    for (SymbolKind Kind :
+         *Params.capabilities.workspace->symbol->symbolKind->valueSet) {
+      SupportedSymbolKinds.set(static_cast<size_t>(Kind));
+    }
+  }
+
+  reply(json::Object{
       {{"capabilities",
-        json::obj{
-            {"textDocumentSync", 1},
+        json::Object{
+            {"textDocumentSync", (int)TextDocumentSyncKind::Incremental},
             {"documentFormattingProvider", true},
             {"documentRangeFormattingProvider", true},
             {"documentOnTypeFormattingProvider",
-             json::obj{
+             json::Object{
                  {"firstTriggerCharacter", "}"},
                  {"moreTriggerCharacter", {}},
              }},
             {"codeActionProvider", true},
             {"completionProvider",
-             json::obj{
+             json::Object{
                  {"resolveProvider", false},
                  {"triggerCharacters", {".", ">", ":"}},
              }},
             {"signatureHelpProvider",
-             json::obj{
+             json::Object{
                  {"triggerCharacters", {"(", ","}},
              }},
             {"definitionProvider", true},
             {"documentHighlightProvider", true},
+            {"hoverProvider", true},
             {"renameProvider", true},
+            {"documentSymbolProvider", true},
+            {"workspaceSymbolProvider", true},
+            {"referencesProvider", true},
             {"executeCommandProvider",
-             json::obj{
+             json::Object{
                  {"commands", {ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND}},
              }},
         }}}});
-  if (Params.rootUri && !Params.rootUri->file.empty())
-    Server.setRootPath(Params.rootUri->file);
-  else if (Params.rootPath && !Params.rootPath->empty())
-    Server.setRootPath(*Params.rootPath);
 }
 
 void ClangdLSPServer::onShutdown(ShutdownParams &Params) {
@@ -131,19 +146,37 @@ void ClangdLSPServer::onShutdown(ShutdownParams &Params) {
 void ClangdLSPServer::onExit(ExitParams &Params) { IsDone = true; }
 
 void ClangdLSPServer::onDocumentDidOpen(DidOpenTextDocumentParams &Params) {
+  PathRef File = Params.textDocument.uri.file();
   if (Params.metadata && !Params.metadata->extraFlags.empty())
-    CDB.setExtraFlagsForFile(Params.textDocument.uri.file,
-                             std::move(Params.metadata->extraFlags));
-  Server.addDocument(Params.textDocument.uri.file, Params.textDocument.text);
+    CDB.setExtraFlagsForFile(File, std::move(Params.metadata->extraFlags));
+
+  std::string &Contents = Params.textDocument.text;
+
+  DraftMgr.addDraft(File, Contents);
+  Server.addDocument(File, Contents, WantDiagnostics::Yes);
 }
 
 void ClangdLSPServer::onDocumentDidChange(DidChangeTextDocumentParams &Params) {
-  if (Params.contentChanges.size() != 1)
-    return replyError(ErrorCode::InvalidParams,
-                      "can only apply one change at a time");
-  // We only support full syncing right now.
-  Server.addDocument(Params.textDocument.uri.file,
-                     Params.contentChanges[0].text);
+  auto WantDiags = WantDiagnostics::Auto;
+  if (Params.wantDiagnostics.hasValue())
+    WantDiags = Params.wantDiagnostics.getValue() ? WantDiagnostics::Yes
+                                                  : WantDiagnostics::No;
+
+  PathRef File = Params.textDocument.uri.file();
+  llvm::Expected<std::string> Contents =
+      DraftMgr.updateDraft(File, Params.contentChanges);
+  if (!Contents) {
+    // If this fails, we are most likely going to be not in sync anymore with
+    // the client.  It is better to remove the draft and let further operations
+    // fail rather than giving wrong results.
+    DraftMgr.removeDraft(File);
+    Server.removeDocument(File);
+    CDB.invalidate(File);
+    elog("Failed to update {0}: {1}", File, Contents.takeError());
+    return;
+  }
+
+  Server.addDocument(File, *Contents, WantDiags);
 }
 
 void ClangdLSPServer::onFileEvent(DidChangeWatchedFilesParams &Params) {
@@ -151,6 +184,14 @@ void ClangdLSPServer::onFileEvent(DidChangeWatchedFilesParams &Params) {
 }
 
 void ClangdLSPServer::onCommand(ExecuteCommandParams &Params) {
+  auto ApplyEdit = [](WorkspaceEdit WE) {
+    ApplyWorkspaceEditParams Edit;
+    Edit.edit = std::move(WE);
+    // We don't need the response so id == 1 is OK.
+    // Ideally, we would wait for the response and if there is no error, we
+    // would reply success/failure to the original RPC.
+    call("workspace/applyEdit", Edit);
+  };
   if (Params.command == ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND &&
       Params.workspaceEdit) {
     // The flow for "apply-fix" :
@@ -162,13 +203,8 @@ void ClangdLSPServer::onCommand(ExecuteCommandParams &Params) {
     // 6. The editor applies the changes (applyEdit), and sends us a reply (but
     // we ignore it)
 
-    ApplyWorkspaceEditParams ApplyEdit;
-    ApplyEdit.edit = *Params.workspaceEdit;
     reply("Fix applied.");
-    // We don't need the response so id == 1 is OK.
-    // Ideally, we would wait for the response and if there is no error, we
-    // would reply success/failure to the original RPC.
-    call("workspace/applyEdit", ApplyEdit);
+    ApplyEdit(*Params.workspaceEdit);
   } else {
     // We should not get here because ExecuteCommandParams would not have
     // parsed in the first place and this handler should not be called. But if
@@ -179,41 +215,64 @@ void ClangdLSPServer::onCommand(ExecuteCommandParams &Params) {
   }
 }
 
+void ClangdLSPServer::onWorkspaceSymbol(WorkspaceSymbolParams &Params) {
+  Server.workspaceSymbols(
+      Params.query, CCOpts.Limit,
+      [this](llvm::Expected<std::vector<SymbolInformation>> Items) {
+        if (!Items)
+          return replyError(ErrorCode::InternalError,
+                            llvm::toString(Items.takeError()));
+        for (auto &Sym : *Items)
+          Sym.kind = adjustKindToCapability(Sym.kind, SupportedSymbolKinds);
+
+        reply(json::Array(*Items));
+      });
+}
+
 void ClangdLSPServer::onRename(RenameParams &Params) {
-  auto File = Params.textDocument.uri.file;
-  auto Code = Server.getDocument(File);
+  Path File = Params.textDocument.uri.file();
+  llvm::Optional<std::string> Code = DraftMgr.getDraft(File);
   if (!Code)
     return replyError(ErrorCode::InvalidParams,
                       "onRename called for non-added file");
 
-  auto Replacements = Server.rename(File, Params.position, Params.newName);
-  if (!Replacements) {
-    replyError(ErrorCode::InternalError,
-               llvm::toString(Replacements.takeError()));
-    return;
-  }
+  Server.rename(
+      File, Params.position, Params.newName,
+      [File, Code,
+       Params](llvm::Expected<std::vector<tooling::Replacement>> Replacements) {
+        if (!Replacements)
+          return replyError(ErrorCode::InternalError,
+                            llvm::toString(Replacements.takeError()));
 
-  std::vector<TextEdit> Edits = replacementsToEdits(*Code, *Replacements);
-  WorkspaceEdit WE;
-  WE.changes = {{Params.textDocument.uri.uri(), Edits}};
-  reply(WE);
+        // Turn the replacements into the format specified by the Language
+        // Server Protocol. Fuse them into one big JSON array.
+        std::vector<TextEdit> Edits;
+        for (const auto &R : *Replacements)
+          Edits.push_back(replacementToEdit(*Code, R));
+        WorkspaceEdit WE;
+        WE.changes = {{Params.textDocument.uri.uri(), Edits}};
+        reply(WE);
+      });
 }
 
 void ClangdLSPServer::onDocumentDidClose(DidCloseTextDocumentParams &Params) {
-  Server.removeDocument(Params.textDocument.uri.file);
+  PathRef File = Params.textDocument.uri.file();
+  DraftMgr.removeDraft(File);
+  Server.removeDocument(File);
+  CDB.invalidate(File);
 }
 
 void ClangdLSPServer::onDocumentOnTypeFormatting(
     DocumentOnTypeFormattingParams &Params) {
-  auto File = Params.textDocument.uri.file;
-  auto Code = Server.getDocument(File);
+  auto File = Params.textDocument.uri.file();
+  auto Code = DraftMgr.getDraft(File);
   if (!Code)
     return replyError(ErrorCode::InvalidParams,
                       "onDocumentOnTypeFormatting called for non-added file");
 
   auto ReplacementsOrError = Server.formatOnType(*Code, File, Params.position);
   if (ReplacementsOrError)
-    reply(json::ary(replacementsToEdits(*Code, ReplacementsOrError.get())));
+    reply(json::Array(replacementsToEdits(*Code, ReplacementsOrError.get())));
   else
     replyError(ErrorCode::UnknownErrorCode,
                llvm::toString(ReplacementsOrError.takeError()));
@@ -221,51 +280,64 @@ void ClangdLSPServer::onDocumentOnTypeFormatting(
 
 void ClangdLSPServer::onDocumentRangeFormatting(
     DocumentRangeFormattingParams &Params) {
-  auto File = Params.textDocument.uri.file;
-  auto Code = Server.getDocument(File);
+  auto File = Params.textDocument.uri.file();
+  auto Code = DraftMgr.getDraft(File);
   if (!Code)
     return replyError(ErrorCode::InvalidParams,
                       "onDocumentRangeFormatting called for non-added file");
 
   auto ReplacementsOrError = Server.formatRange(*Code, File, Params.range);
   if (ReplacementsOrError)
-    reply(json::ary(replacementsToEdits(*Code, ReplacementsOrError.get())));
+    reply(json::Array(replacementsToEdits(*Code, ReplacementsOrError.get())));
   else
     replyError(ErrorCode::UnknownErrorCode,
                llvm::toString(ReplacementsOrError.takeError()));
 }
 
 void ClangdLSPServer::onDocumentFormatting(DocumentFormattingParams &Params) {
-  auto File = Params.textDocument.uri.file;
-  auto Code = Server.getDocument(File);
+  auto File = Params.textDocument.uri.file();
+  auto Code = DraftMgr.getDraft(File);
   if (!Code)
     return replyError(ErrorCode::InvalidParams,
                       "onDocumentFormatting called for non-added file");
 
   auto ReplacementsOrError = Server.formatFile(*Code, File);
   if (ReplacementsOrError)
-    reply(json::ary(replacementsToEdits(*Code, ReplacementsOrError.get())));
+    reply(json::Array(replacementsToEdits(*Code, ReplacementsOrError.get())));
   else
     replyError(ErrorCode::UnknownErrorCode,
                llvm::toString(ReplacementsOrError.takeError()));
 }
 
+void ClangdLSPServer::onDocumentSymbol(DocumentSymbolParams &Params) {
+  Server.documentSymbols(
+      Params.textDocument.uri.file(),
+      [this](llvm::Expected<std::vector<SymbolInformation>> Items) {
+        if (!Items)
+          return replyError(ErrorCode::InvalidParams,
+                            llvm::toString(Items.takeError()));
+        for (auto &Sym : *Items)
+          Sym.kind = adjustKindToCapability(Sym.kind, SupportedSymbolKinds);
+        reply(json::Array(*Items));
+      });
+}
+
 void ClangdLSPServer::onCodeAction(CodeActionParams &Params) {
   // We provide a code action for each diagnostic at the requested location
   // which has FixIts available.
-  auto Code = Server.getDocument(Params.textDocument.uri.file);
+  auto Code = DraftMgr.getDraft(Params.textDocument.uri.file());
   if (!Code)
     return replyError(ErrorCode::InvalidParams,
                       "onCodeAction called for non-added file");
 
-  json::ary Commands;
+  json::Array Commands;
   for (Diagnostic &D : Params.context.diagnostics) {
-    auto Edits = getFixIts(Params.textDocument.uri.file, D);
-    if (!Edits.empty()) {
+    for (auto &F : getFixes(Params.textDocument.uri.file(), D)) {
       WorkspaceEdit WE;
+      std::vector<TextEdit> Edits(F.Edits.begin(), F.Edits.end());
       WE.changes = {{Params.textDocument.uri.uri(), std::move(Edits)}};
-      Commands.push_back(json::obj{
-          {"title", llvm::formatv("Apply FixIt {0}", D.message)},
+      Commands.push_back(json::Object{
+          {"title", llvm::formatv("Apply fix: {0}", F.Message)},
           {"command", ExecuteCommandParams::CLANGD_APPLY_FIX_COMMAND},
           {"arguments", {WE}},
       });
@@ -275,71 +347,139 @@ void ClangdLSPServer::onCodeAction(CodeActionParams &Params) {
 }
 
 void ClangdLSPServer::onCompletion(TextDocumentPositionParams &Params) {
-  Server.codeComplete(Params.textDocument.uri.file,
-                      Position{Params.position.line, Params.position.character},
-                      CCOpts,
-                      [](Tagged<CompletionList> List) { reply(List.Value); });
+  CreateSpaceForTaskHandle();
+  TaskHandle TH = Server.codeComplete(
+      Params.textDocument.uri.file(), Params.position, CCOpts,
+      [this](llvm::Expected<CodeCompleteResult> List) {
+        auto _ = llvm::make_scope_exit([this]() { CleanupTaskHandle(); });
+
+        if (!List)
+          return replyError(List.takeError());
+        CompletionList LSPList;
+        LSPList.isIncomplete = List->HasMore;
+        for (const auto &R : List->Completions)
+          LSPList.items.push_back(R.render(CCOpts));
+        return reply(std::move(LSPList));
+      });
+  StoreTaskHandle(std::move(TH));
 }
 
 void ClangdLSPServer::onSignatureHelp(TextDocumentPositionParams &Params) {
-  auto SignatureHelp = Server.signatureHelp(
-      Params.textDocument.uri.file,
-      Position{Params.position.line, Params.position.character});
-  if (!SignatureHelp)
-    return replyError(ErrorCode::InvalidParams,
-                      llvm::toString(SignatureHelp.takeError()));
-  reply(SignatureHelp->Value);
+  Server.signatureHelp(Params.textDocument.uri.file(), Params.position,
+                       [](llvm::Expected<SignatureHelp> SignatureHelp) {
+                         if (!SignatureHelp)
+                           return replyError(
+                               ErrorCode::InvalidParams,
+                               llvm::toString(SignatureHelp.takeError()));
+                         reply(*SignatureHelp);
+                       });
 }
 
 void ClangdLSPServer::onGoToDefinition(TextDocumentPositionParams &Params) {
-  auto Items = Server.findDefinitions(
-      Params.textDocument.uri.file,
-      Position{Params.position.line, Params.position.character});
-  if (!Items)
-    return replyError(ErrorCode::InvalidParams,
-                      llvm::toString(Items.takeError()));
-  reply(json::ary(Items->Value));
+  Server.findDefinitions(Params.textDocument.uri.file(), Params.position,
+                         [](llvm::Expected<std::vector<Location>> Items) {
+                           if (!Items)
+                             return replyError(
+                                 ErrorCode::InvalidParams,
+                                 llvm::toString(Items.takeError()));
+                           reply(json::Array(*Items));
+                         });
 }
 
 void ClangdLSPServer::onSwitchSourceHeader(TextDocumentIdentifier &Params) {
-  llvm::Optional<Path> Result = Server.switchSourceHeader(Params.uri.file);
+  llvm::Optional<Path> Result = Server.switchSourceHeader(Params.uri.file());
   reply(Result ? URI::createFile(*Result).toString() : "");
 }
 
 void ClangdLSPServer::onDocumentHighlight(TextDocumentPositionParams &Params) {
-  auto Highlights = Server.findDocumentHighlights(
-      Params.textDocument.uri.file,
-      Position{Params.position.line, Params.position.character});
-
-  if (!Highlights) {
-    replyError(ErrorCode::InternalError,
-               llvm::toString(Highlights.takeError()));
-    return;
-  }
-
-  reply(json::ary(Highlights->Value));
+  Server.findDocumentHighlights(
+      Params.textDocument.uri.file(), Params.position,
+      [](llvm::Expected<std::vector<DocumentHighlight>> Highlights) {
+        if (!Highlights)
+          return replyError(ErrorCode::InternalError,
+                            llvm::toString(Highlights.takeError()));
+        reply(json::Array(*Highlights));
+      });
 }
 
-ClangdLSPServer::ClangdLSPServer(JSONOutput &Out, unsigned AsyncThreadsCount,
-                                 bool StorePreamblesInMemory,
-                                 const clangd::CodeCompleteOptions &CCOpts,
-                                 llvm::Optional<StringRef> ResourceDir,
-                                 llvm::Optional<Path> CompileCommandsDir,
-                                 bool BuildDynamicSymbolIndex,
-                                 SymbolIndex *StaticIdx)
-    : Out(Out), CDB(std::move(CompileCommandsDir)), CCOpts(CCOpts),
-      Server(CDB, /*DiagConsumer=*/*this, FSProvider, AsyncThreadsCount,
-             StorePreamblesInMemory, BuildDynamicSymbolIndex, StaticIdx,
-             ResourceDir) {}
+void ClangdLSPServer::onHover(TextDocumentPositionParams &Params) {
+  Server.findHover(Params.textDocument.uri.file(), Params.position,
+                   [](llvm::Expected<llvm::Optional<Hover>> H) {
+                     if (!H) {
+                       replyError(ErrorCode::InternalError,
+                                  llvm::toString(H.takeError()));
+                       return;
+                     }
 
-bool ClangdLSPServer::run(std::istream &In, JSONStreamStyle InputStyle) {
+                     reply(*H);
+                   });
+}
+
+void ClangdLSPServer::applyConfiguration(
+    const ClangdConfigurationParamsChange &Settings) {
+  // Compilation database change.
+  if (Settings.compilationDatabasePath.hasValue()) {
+    CDB.setCompileCommandsDir(Settings.compilationDatabasePath.getValue());
+
+    reparseOpenedFiles();
+  }
+
+  // Update to the compilation database.
+  if (Settings.compilationDatabaseChanges) {
+    const auto &CompileCommandUpdates = *Settings.compilationDatabaseChanges;
+    bool ShouldReparseOpenFiles = false;
+    for (auto &Entry : CompileCommandUpdates) {
+      /// The opened files need to be reparsed only when some existing
+      /// entries are changed.
+      PathRef File = Entry.first;
+      if (!CDB.setCompilationCommandForFile(
+              File, tooling::CompileCommand(
+                        std::move(Entry.second.workingDirectory), File,
+                        std::move(Entry.second.compilationCommand),
+                        /*Output=*/"")))
+        ShouldReparseOpenFiles = true;
+    }
+    if (ShouldReparseOpenFiles)
+      reparseOpenedFiles();
+  }
+}
+
+// FIXME: This function needs to be properly tested.
+void ClangdLSPServer::onChangeConfiguration(
+    DidChangeConfigurationParams &Params) {
+  applyConfiguration(Params.settings);
+}
+
+void ClangdLSPServer::onReference(ReferenceParams &Params) {
+  Server.findReferences(Params.textDocument.uri.file(), Params.position,
+                        [](llvm::Expected<std::vector<Location>> Locations) {
+                          if (!Locations)
+                            return replyError(
+                                ErrorCode::InternalError,
+                                llvm::toString(Locations.takeError()));
+                          reply(llvm::json::Array(*Locations));
+                        });
+}
+
+ClangdLSPServer::ClangdLSPServer(JSONOutput &Out,
+                                 const clangd::CodeCompleteOptions &CCOpts,
+                                 llvm::Optional<Path> CompileCommandsDir,
+                                 bool ShouldUseInMemoryCDB,
+                                 const ClangdServer::Options &Opts)
+    : Out(Out), CDB(ShouldUseInMemoryCDB ? CompilationDB::makeInMemory()
+                                         : CompilationDB::makeDirectoryBased(
+                                               std::move(CompileCommandsDir))),
+      CCOpts(CCOpts), SupportedSymbolKinds(defaultSymbolKinds()),
+      Server(CDB.getCDB(), FSProvider, /*DiagConsumer=*/*this, Opts) {}
+
+bool ClangdLSPServer::run(std::FILE *In, JSONStreamStyle InputStyle) {
   assert(!IsDone && "Run was called before");
 
   // Set up JSONRPCDispatcher.
-  JSONRPCDispatcher Dispatcher([](const json::Expr &Params) {
+  JSONRPCDispatcher Dispatcher([](const json::Value &Params) {
     replyError(ErrorCode::MethodNotFound, "method not found");
   });
-  registerCallbackHandlers(Dispatcher, Out, /*Callbacks=*/*this);
+  registerCallbackHandlers(Dispatcher, /*Callbacks=*/*this);
 
   // Run the Language Server loop.
   runLanguageServerLoop(In, Out, InputStyle, Dispatcher, IsDone);
@@ -351,8 +491,8 @@ bool ClangdLSPServer::run(std::istream &In, JSONStreamStyle InputStyle) {
   return ShutdownRequestReceived;
 }
 
-std::vector<TextEdit> ClangdLSPServer::getFixIts(StringRef File,
-                                                 const clangd::Diagnostic &D) {
+std::vector<Fix> ClangdLSPServer::getFixes(StringRef File,
+                                           const clangd::Diagnostic &D) {
   std::lock_guard<std::mutex> Lock(FixItsMutex);
   auto DiagToFixItsIter = FixItsMap.find(File);
   if (DiagToFixItsIter == FixItsMap.end())
@@ -366,22 +506,39 @@ std::vector<TextEdit> ClangdLSPServer::getFixIts(StringRef File,
   return FixItsIter->second;
 }
 
-void ClangdLSPServer::onDiagnosticsReady(
-    PathRef File, Tagged<std::vector<DiagWithFixIts>> Diagnostics) {
-  json::ary DiagnosticsJSON;
+void ClangdLSPServer::onDiagnosticsReady(PathRef File,
+                                         std::vector<Diag> Diagnostics) {
+  json::Array DiagnosticsJSON;
 
   DiagnosticToReplacementMap LocalFixIts; // Temporary storage
-  for (auto &DiagWithFixes : Diagnostics.Value) {
-    auto Diag = DiagWithFixes.Diag;
-    DiagnosticsJSON.push_back(json::obj{
-        {"range", Diag.range},
-        {"severity", Diag.severity},
-        {"message", Diag.message},
+  for (auto &Diag : Diagnostics) {
+    toLSPDiags(Diag, [&](clangd::Diagnostic Diag, llvm::ArrayRef<Fix> Fixes) {
+      json::Object LSPDiag({
+          {"range", Diag.range},
+          {"severity", Diag.severity},
+          {"message", Diag.message},
+      });
+      // LSP extension: embed the fixes in the diagnostic.
+      if (DiagOpts.EmbedFixesInDiagnostics && !Fixes.empty()) {
+        json::Array ClangdFixes;
+        for (const auto &Fix : Fixes) {
+          WorkspaceEdit WE;
+          URIForFile URI{File};
+          WE.changes = {{URI.uri(), std::vector<TextEdit>(Fix.Edits.begin(),
+                                                          Fix.Edits.end())}};
+          ClangdFixes.push_back(
+              json::Object{{"edit", toJSON(WE)}, {"title", Fix.Message}});
+        }
+        LSPDiag["clangd_fixes"] = std::move(ClangdFixes);
+      }
+      if (DiagOpts.SendDiagnosticCategory && !Diag.category.empty())
+        LSPDiag["category"] = Diag.category;
+      DiagnosticsJSON.push_back(std::move(LSPDiag));
+
+      auto &FixItsForDiagnostic = LocalFixIts[Diag];
+      std::copy(Fixes.begin(), Fixes.end(),
+                std::back_inserter(FixItsForDiagnostic));
     });
-    // We convert to Replacements to become independent of the SourceManager.
-    auto &FixItsForDiagnostic = LocalFixIts[Diag];
-    std::copy(DiagWithFixes.FixIts.begin(), DiagWithFixes.FixIts.end(),
-              std::back_inserter(FixItsForDiagnostic));
   }
 
   // Cache FixIts
@@ -392,13 +549,129 @@ void ClangdLSPServer::onDiagnosticsReady(
   }
 
   // Publish diagnostics.
-  Out.writeMessage(json::obj{
+  Out.writeMessage(json::Object{
       {"jsonrpc", "2.0"},
       {"method", "textDocument/publishDiagnostics"},
       {"params",
-       json::obj{
+       json::Object{
            {"uri", URIForFile{File}},
            {"diagnostics", std::move(DiagnosticsJSON)},
        }},
   });
+}
+
+void ClangdLSPServer::reparseOpenedFiles() {
+  for (const Path &FilePath : DraftMgr.getActiveFiles())
+    Server.addDocument(FilePath, *DraftMgr.getDraft(FilePath),
+                       WantDiagnostics::Auto);
+}
+
+ClangdLSPServer::CompilationDB ClangdLSPServer::CompilationDB::makeInMemory() {
+  return CompilationDB(llvm::make_unique<InMemoryCompilationDb>(), nullptr,
+                       /*IsDirectoryBased=*/false);
+}
+
+ClangdLSPServer::CompilationDB
+ClangdLSPServer::CompilationDB::makeDirectoryBased(
+    llvm::Optional<Path> CompileCommandsDir) {
+  auto CDB = llvm::make_unique<DirectoryBasedGlobalCompilationDatabase>(
+      std::move(CompileCommandsDir));
+  auto CachingCDB = llvm::make_unique<CachingCompilationDb>(*CDB);
+  return CompilationDB(std::move(CDB), std::move(CachingCDB),
+                       /*IsDirectoryBased=*/true);
+}
+
+void ClangdLSPServer::CompilationDB::invalidate(PathRef File) {
+  if (!IsDirectoryBased)
+    static_cast<InMemoryCompilationDb *>(CDB.get())->invalidate(File);
+  else
+    CachingCDB->invalidate(File);
+}
+
+bool ClangdLSPServer::CompilationDB::setCompilationCommandForFile(
+    PathRef File, tooling::CompileCommand CompilationCommand) {
+  if (IsDirectoryBased) {
+    elog("Trying to set compile command for {0} while using directory-based "
+         "compilation database",
+         File);
+    return false;
+  }
+  return static_cast<InMemoryCompilationDb *>(CDB.get())
+      ->setCompilationCommandForFile(File, std::move(CompilationCommand));
+}
+
+void ClangdLSPServer::CompilationDB::setExtraFlagsForFile(
+    PathRef File, std::vector<std::string> ExtraFlags) {
+  if (!IsDirectoryBased) {
+    elog("Trying to set extra flags for {0} while using in-memory compilation "
+         "database",
+         File);
+    return;
+  }
+  static_cast<DirectoryBasedGlobalCompilationDatabase *>(CDB.get())
+      ->setExtraFlagsForFile(File, std::move(ExtraFlags));
+  CachingCDB->invalidate(File);
+}
+
+void ClangdLSPServer::CompilationDB::setCompileCommandsDir(Path P) {
+  if (!IsDirectoryBased) {
+    elog("Trying to set compile commands dir while using in-memory compilation "
+         "database");
+    return;
+  }
+  static_cast<DirectoryBasedGlobalCompilationDatabase *>(CDB.get())
+      ->setCompileCommandsDir(P);
+  CachingCDB->clear();
+}
+
+GlobalCompilationDatabase &ClangdLSPServer::CompilationDB::getCDB() {
+  if (CachingCDB)
+    return *CachingCDB;
+  return *CDB;
+}
+
+void ClangdLSPServer::onCancelRequest(CancelParams &Params) {
+  std::lock_guard<std::mutex> Lock(TaskHandlesMutex);
+  const auto &It = TaskHandles.find(Params.ID);
+  if (It == TaskHandles.end())
+    return;
+  if (It->second)
+    It->second->cancel();
+  TaskHandles.erase(It);
+}
+
+void ClangdLSPServer::CleanupTaskHandle() {
+  const json::Value *ID = getRequestId();
+  if (!ID)
+    return;
+  std::string NormalizedID = NormalizeRequestID(*ID);
+  std::lock_guard<std::mutex> Lock(TaskHandlesMutex);
+  TaskHandles.erase(NormalizedID);
+}
+
+void ClangdLSPServer::CreateSpaceForTaskHandle() {
+  const json::Value *ID = getRequestId();
+  if (!ID)
+    return;
+  std::string NormalizedID = NormalizeRequestID(*ID);
+  std::lock_guard<std::mutex> Lock(TaskHandlesMutex);
+  if (!TaskHandles.insert({NormalizedID, nullptr}).second)
+    elog("Creation of space for task handle: {0} failed.", NormalizedID);
+}
+
+void ClangdLSPServer::StoreTaskHandle(TaskHandle TH) {
+  const json::Value *ID = getRequestId();
+  if (!ID)
+    return;
+  std::string NormalizedID = NormalizeRequestID(*ID);
+  std::lock_guard<std::mutex> Lock(TaskHandlesMutex);
+  auto It = TaskHandles.find(NormalizedID);
+  if (It == TaskHandles.end()) {
+    elog("CleanupTaskHandle called before store can happen for request:{0}.",
+         NormalizedID);
+    return;
+  }
+  if (It->second != nullptr)
+    elog("TaskHandle didn't get cleared for: {0}.", NormalizedID);
+  It->second = std::move(TH);
 }

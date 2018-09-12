@@ -181,6 +181,26 @@ llvm::Expected<URI> URI::create(llvm::StringRef AbsolutePath,
   return S->get()->uriFromAbsolutePath(AbsolutePath);
 }
 
+llvm::Expected<URI> URI::create(llvm::StringRef AbsolutePath,
+                                const std::vector<std::string> &Schemes) {
+  if (!llvm::sys::path::is_absolute(AbsolutePath))
+    return make_string_error("Not a valid absolute path: " + AbsolutePath);
+  for (const auto &Scheme : Schemes) {
+    auto URI = URI::create(AbsolutePath, Scheme);
+    // For some paths, conversion to different URI schemes is impossible. These
+    // should be just skipped.
+    if (!URI) {
+      // Ignore the error.
+      llvm::consumeError(URI.takeError());
+      continue;
+    }
+    return URI;
+  }
+  return make_string_error(
+      "Couldn't convert " + AbsolutePath +
+      " to any given scheme: " + llvm::join(Schemes, ", "));
+}
+
 URI URI::createFile(llvm::StringRef AbsolutePath) {
   auto U = create(AbsolutePath, "file");
   if (!U)
@@ -194,6 +214,13 @@ llvm::Expected<std::string> URI::resolve(const URI &Uri,
   if (!S)
     return S.takeError();
   return S->get()->getAbsolutePath(Uri.Authority, Uri.Body, HintPath);
+}
+
+llvm::Expected<std::string> URI::includeSpelling(const URI &Uri) {
+  auto S = findSchemeByName(Uri.Scheme);
+  if (!S)
+    return S.takeError();
+  return S->get()->getIncludeSpelling(Uri);
 }
 
 } // namespace clangd

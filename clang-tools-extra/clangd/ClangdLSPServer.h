@@ -5,12 +5,14 @@
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 
 #ifndef LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDLSPSERVER_H
 #define LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDLSPSERVER_H
 
 #include "ClangdServer.h"
+#include "DraftStore.h"
+#include "FindSymbols.h"
 #include "GlobalCompilationDatabase.h"
 #include "Path.h"
 #include "Protocol.h"
@@ -31,28 +33,22 @@ public:
   /// If \p CompileCommandsDir has a value, compile_commands.json will be
   /// loaded only from \p CompileCommandsDir. Otherwise, clangd will look
   /// for compile_commands.json in all parent directories of each file.
-  ClangdLSPServer(JSONOutput &Out, unsigned AsyncThreadsCount,
-                  bool StorePreamblesInMemory,
-                  const clangd::CodeCompleteOptions &CCOpts,
-                  llvm::Optional<StringRef> ResourceDir,
+  ClangdLSPServer(JSONOutput &Out, const clangd::CodeCompleteOptions &CCOpts,
                   llvm::Optional<Path> CompileCommandsDir,
-                  bool BuildDynamicSymbolIndex,
-                  SymbolIndex *StaticIdx = nullptr);
+                  bool ShouldUseInMemoryCDB, const ClangdServer::Options &Opts);
 
   /// Run LSP server loop, receiving input for it from \p In. \p In must be
   /// opened in binary mode. Output will be written using Out variable passed to
   /// class constructor. This method must not be executed more than once for
   /// each instance of ClangdLSPServer.
   ///
-  /// \return Wether we received a 'shutdown' request before an 'exit' request
-  bool run(std::istream &In,
+  /// \return Whether we received a 'shutdown' request before an 'exit' request.
+  bool run(std::FILE *In,
            JSONStreamStyle InputStyle = JSONStreamStyle::Standard);
 
 private:
   // Implement DiagnosticsConsumer.
-  virtual void
-  onDiagnosticsReady(PathRef File,
-                     Tagged<std::vector<DiagWithFixIts>> Diagnostics) override;
+  void onDiagnosticsReady(PathRef File, std::vector<Diag> Diagnostics) override;
 
   // Implement ProtocolCallbacks.
   void onInitialize(InitializeParams &Params) override;
@@ -66,17 +62,29 @@ private:
   void
   onDocumentRangeFormatting(DocumentRangeFormattingParams &Params) override;
   void onDocumentFormatting(DocumentFormattingParams &Params) override;
+  void onDocumentSymbol(DocumentSymbolParams &Params) override;
   void onCodeAction(CodeActionParams &Params) override;
   void onCompletion(TextDocumentPositionParams &Params) override;
   void onSignatureHelp(TextDocumentPositionParams &Params) override;
   void onGoToDefinition(TextDocumentPositionParams &Params) override;
+  void onReference(ReferenceParams &Params) override;
   void onSwitchSourceHeader(TextDocumentIdentifier &Params) override;
   void onDocumentHighlight(TextDocumentPositionParams &Params) override;
   void onFileEvent(DidChangeWatchedFilesParams &Params) override;
   void onCommand(ExecuteCommandParams &Params) override;
+  void onWorkspaceSymbol(WorkspaceSymbolParams &Params) override;
   void onRename(RenameParams &Parames) override;
+  void onHover(TextDocumentPositionParams &Params) override;
+  void onChangeConfiguration(DidChangeConfigurationParams &Params) override;
+  void onCancelRequest(CancelParams &Params) override;
 
-  std::vector<TextEdit> getFixIts(StringRef File, const clangd::Diagnostic &D);
+  std::vector<Fix> getFixes(StringRef File, const clangd::Diagnostic &D);
+
+  /// Forces a reparse of all currently opened files.  As a result, this method
+  /// may be very expensive.  This method is normally called when the
+  /// compilation database is changed.
+  void reparseOpenedFiles();
+  void applyConfiguration(const ClangdConfigurationParamsChange &Settings);
 
   JSONOutput &Out;
   /// Used to indicate that the 'shutdown' request was received from the
@@ -89,25 +97,95 @@ private:
   bool IsDone = false;
 
   std::mutex FixItsMutex;
-  typedef std::map<clangd::Diagnostic, std::vector<TextEdit>,
-                   LSPDiagnosticCompare>
+  typedef std::map<clangd::Diagnostic, std::vector<Fix>, LSPDiagnosticCompare>
       DiagnosticToReplacementMap;
   /// Caches FixIts per file and diagnostics
   llvm::StringMap<DiagnosticToReplacementMap> FixItsMap;
 
+  /// Encapsulates the directory-based or the in-memory compilation database
+  /// that's used by the LSP server.
+  class CompilationDB {
+  public:
+    static CompilationDB makeInMemory();
+    static CompilationDB
+    makeDirectoryBased(llvm::Optional<Path> CompileCommandsDir);
+
+    void invalidate(PathRef File);
+
+    /// Sets the compilation command for a particular file.
+    /// Only valid for in-memory CDB, no-op and error log on DirectoryBasedCDB.
+    ///
+    /// \returns True if the File had no compilation command before.
+    bool
+    setCompilationCommandForFile(PathRef File,
+                                 tooling::CompileCommand CompilationCommand);
+
+    /// Adds extra compilation flags to the compilation command for a particular
+    /// file. Only valid for directory-based CDB, no-op and error log on
+    /// InMemoryCDB;
+    void setExtraFlagsForFile(PathRef File,
+                              std::vector<std::string> ExtraFlags);
+
+    /// Set the compile commands directory to \p P.
+    /// Only valid for directory-based CDB, no-op and error log on InMemoryCDB;
+    void setCompileCommandsDir(Path P);
+
+    /// Returns a CDB that should be used to get compile commands for the
+    /// current instance of ClangdLSPServer.
+    GlobalCompilationDatabase &getCDB();
+
+  private:
+    CompilationDB(std::unique_ptr<GlobalCompilationDatabase> CDB,
+                  std::unique_ptr<CachingCompilationDb> CachingCDB,
+                  bool IsDirectoryBased)
+        : CDB(std::move(CDB)), CachingCDB(std::move(CachingCDB)),
+          IsDirectoryBased(IsDirectoryBased) {}
+
+    // if IsDirectoryBased is true, an instance of InMemoryCDB.
+    // If IsDirectoryBased is false, an instance of DirectoryBasedCDB.
+    // unique_ptr<GlobalCompilationDatabase> CDB;
+    std::unique_ptr<GlobalCompilationDatabase> CDB;
+    // Non-null only for directory-based CDB
+    std::unique_ptr<CachingCompilationDb> CachingCDB;
+    bool IsDirectoryBased;
+  };
+
   // Various ClangdServer parameters go here. It's important they're created
   // before ClangdServer.
-  DirectoryBasedGlobalCompilationDatabase CDB;
+  CompilationDB CDB;
+
   RealFileSystemProvider FSProvider;
   /// Options used for code completion
   clangd::CodeCompleteOptions CCOpts;
+  /// Options used for diagnostics.
+  ClangdDiagnosticOptions DiagOpts;
+  /// The supported kinds of the client.
+  SymbolKindBitset SupportedSymbolKinds;
+
+  // Store of the current versions of the open documents.
+  DraftStore DraftMgr;
+
   // Server must be the last member of the class to allow its destructor to exit
   // the worker thread that may otherwise run an async callback on partially
   // destructed instance of ClangdLSPServer.
   ClangdServer Server;
-};
 
+  // Holds task handles for running requets. Key of the map is a serialized
+  // request id.
+  llvm::StringMap<TaskHandle> TaskHandles;
+  std::mutex TaskHandlesMutex;
+
+  // Following three functions are for managing TaskHandles map. They store or
+  // remove a task handle for the request-id stored in current Context.
+  // FIXME(kadircet): Wrap the following three functions in a RAII object to
+  // make sure these do not get misused. The object might be stored in the
+  // Context of the thread or moved around until a reply is generated for the
+  // request.
+  void CleanupTaskHandle();
+  void CreateSpaceForTaskHandle();
+  void StoreTaskHandle(TaskHandle TH);
+};
 } // namespace clangd
 } // namespace clang
 
-#endif
+#endif // LLVM_CLANG_TOOLS_EXTRA_CLANGD_CLANGDLSPSERVER_H

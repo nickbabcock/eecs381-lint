@@ -6,7 +6,7 @@
 # CHECK-NEXT:  "params": {
 # CHECK-NEXT:    "diagnostics": [
 # CHECK-NEXT:      {
-# CHECK-NEXT:        "message": "variable 'i' is uninitialized when used here",
+# CHECK-NEXT:        "message": "Variable 'i' is uninitialized when used here",
 # CHECK-NEXT:        "range": {
 # CHECK-NEXT:          "end": {
 # CHECK-NEXT:            "character": 28,
@@ -18,31 +18,17 @@
 # CHECK-NEXT:          }
 # CHECK-NEXT:        },
 # CHECK-NEXT:        "severity": 2
-# CHECK-NEXT:      },
-# CHECK-NEXT:      {
-# CHECK-NEXT:        "message": "initialize the variable 'i' to silence this warning",
-# CHECK-NEXT:        "range": {
-# CHECK-NEXT:          "end": {
-# CHECK-NEXT:            "character": 19,
-# CHECK-NEXT:            "line": 0
-# CHECK-NEXT:          },
-# CHECK-NEXT:          "start": {
-# CHECK-NEXT:            "character": 18,
-# CHECK-NEXT:            "line": 0
-# CHECK-NEXT:          }
-# CHECK-NEXT:        },
-# CHECK-NEXT:        "severity": 3
 # CHECK-NEXT:      }
 # CHECK-NEXT:    ],
 # CHECK-NEXT:    "uri": "file://{{.*}}/foo.c"
 # CHECK-NEXT:  }
 ---
-{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"test:///foo.c","version":2},"contentChanges":[{"text":"int main() { int i; return i; }"}]}}
+{"jsonrpc":"2.0","method":"textDocument/didChange","params":{"textDocument":{"uri":"test:///foo.c","version":2},"contentChanges":[{"text":"int main() { int i; return i+1; }"}]}}
 #      CHECK:  "method": "textDocument/publishDiagnostics",
 # CHECK-NEXT:  "params": {
 # CHECK-NEXT:    "diagnostics": [
 # CHECK-NEXT:      {
-# CHECK-NEXT:        "message": "variable 'i' is uninitialized when used here",
+# CHECK-NEXT:        "message": "Variable 'i' is uninitialized when used here",
 # CHECK-NEXT:        "range": {
 # CHECK-NEXT:          "end": {
 # CHECK-NEXT:            "character": 28,
@@ -54,20 +40,6 @@
 # CHECK-NEXT:          }
 # CHECK-NEXT:        },
 # CHECK-NEXT:        "severity": 2
-# CHECK-NEXT:      },
-# CHECK-NEXT:      {
-# CHECK-NEXT:        "message": "initialize the variable 'i' to silence this warning",
-# CHECK-NEXT:        "range": {
-# CHECK-NEXT:          "end": {
-# CHECK-NEXT:            "character": 19,
-# CHECK-NEXT:            "line": 0
-# CHECK-NEXT:          },
-# CHECK-NEXT:          "start": {
-# CHECK-NEXT:            "character": 18,
-# CHECK-NEXT:            "line": 0
-# CHECK-NEXT:          }
-# CHECK-NEXT:        },
-# CHECK-NEXT:        "severity": 3
 # CHECK-NEXT:      }
 # CHECK-NEXT:    ],
 # CHECK-NEXT:    "uri": "file://{{.*}}/foo.c"
@@ -75,6 +47,6 @@
 ---
 {"jsonrpc":"2.0","id":5,"method":"shutdown"}
 ---
-{"jsonrpc":"2.0":"method":"exit"}
+{"jsonrpc":"2.0","method":"exit"}
 
 

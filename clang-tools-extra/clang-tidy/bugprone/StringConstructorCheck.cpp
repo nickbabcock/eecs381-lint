@@ -18,9 +18,11 @@ namespace clang {
 namespace tidy {
 namespace bugprone {
 
+namespace {
 AST_MATCHER_P(IntegerLiteral, isBiggerThan, unsigned, N) {
   return Node.getValue().getZExtValue() > N;
 }
+} // namespace
 
 StringConstructorCheck::StringConstructorCheck(StringRef Name,
                                                ClangTidyContext *Context)
@@ -104,7 +106,7 @@ void StringConstructorCheck::check(const MatchFinder::MatchResult &Result) {
   const ASTContext &Ctx = *Result.Context;
   const auto *E = Result.Nodes.getNodeAs<CXXConstructExpr>("constructor");
   assert(E && "missing constructor expression");
-  SourceLocation Loc = E->getLocStart();
+  SourceLocation Loc = E->getBeginLoc();
 
   if (Result.Nodes.getNodeAs<Expr>("swapped-parameter")) {
     const Expr *P0 = E->getArg(0);

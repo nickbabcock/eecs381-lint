@@ -5,34 +5,18 @@ add_clang_library(clangTidyMiscModule
   EecsEnumSuffixCheck.cpp
   EecsEnumValueCapsCheck.cpp
   EecsTypedefTCheck.cpp
-  ForwardingReferenceOverloadCheck.cpp
-  LambdaFunctionNameCheck.cpp
   MisplacedConstCheck.cpp
   UnconventionalAssignOperatorCheck.cpp
   DefinitionsInHeadersCheck.cpp
-  MacroParenthesesCheck.cpp
-  MacroRepeatedSideEffectsCheck.cpp
   MiscTidyModule.cpp
-  MisplacedWideningCastCheck.cpp
   NewDeleteOverloadsCheck.cpp
   NonCopyableObjects.cpp
   RedundantExpressionCheck.cpp
-  SizeofContainerCheck.cpp
-  SizeofExpressionCheck.cpp
   StaticAssertCheck.cpp
-  StringIntegerAssignmentCheck.cpp
-  StringLiteralWithEmbeddedNulCheck.cpp
-  SuspiciousEnumUsageCheck.cpp
-  SuspiciousMissingCommaCheck.cpp
-  SuspiciousSemicolonCheck.cpp
-  SuspiciousStringCompareCheck.cpp
-  SwappedArgumentsCheck.cpp
   ThrowByValueCatchByReferenceCheck.cpp
-  UndelegatedConstructor.cpp
   UniqueptrResetReleaseCheck.cpp
   UnusedAliasDeclsCheck.cpp
   UnusedParametersCheck.cpp
-  UnusedRAIICheck.cpp
   UnusedUsingDeclsCheck.cpp
 
   LINK_LIBS

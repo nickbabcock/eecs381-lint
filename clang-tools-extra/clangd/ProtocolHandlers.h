@@ -38,6 +38,7 @@ public:
   virtual void onDocumentDidChange(DidChangeTextDocumentParams &Params) = 0;
   virtual void onDocumentDidClose(DidCloseTextDocumentParams &Params) = 0;
   virtual void onDocumentFormatting(DocumentFormattingParams &Params) = 0;
+  virtual void onDocumentSymbol(DocumentSymbolParams &Params) = 0;
   virtual void
   onDocumentOnTypeFormatting(DocumentOnTypeFormattingParams &Params) = 0;
   virtual void
@@ -46,14 +47,19 @@ public:
   virtual void onCompletion(TextDocumentPositionParams &Params) = 0;
   virtual void onSignatureHelp(TextDocumentPositionParams &Params) = 0;
   virtual void onGoToDefinition(TextDocumentPositionParams &Params) = 0;
+  virtual void onReference(ReferenceParams &Params) = 0;
   virtual void onSwitchSourceHeader(TextDocumentIdentifier &Params) = 0;
   virtual void onFileEvent(DidChangeWatchedFilesParams &Params) = 0;
   virtual void onCommand(ExecuteCommandParams &Params) = 0;
+  virtual void onWorkspaceSymbol(WorkspaceSymbolParams &Params) = 0;
   virtual void onRename(RenameParams &Parames) = 0;
   virtual void onDocumentHighlight(TextDocumentPositionParams &Params) = 0;
+  virtual void onHover(TextDocumentPositionParams &Params) = 0;
+  virtual void onChangeConfiguration(DidChangeConfigurationParams &Params) = 0;
+  virtual void onCancelRequest(CancelParams &Params) = 0;
 };
 
-void registerCallbackHandlers(JSONRPCDispatcher &Dispatcher, JSONOutput &Out,
+void registerCallbackHandlers(JSONRPCDispatcher &Dispatcher,
                               ProtocolCallbacks &Callbacks);
 
 } // namespace clangd

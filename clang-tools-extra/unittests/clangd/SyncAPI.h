@@ -5,10 +5,14 @@
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
+//
 // This file contains synchronous versions of ClangdServer's async API. We
 // deliberately don't expose the sync API outside tests to encourage using the
 // async versions in clangd code.
+//
+//===----------------------------------------------------------------------===//
+
 #ifndef LLVM_CLANG_TOOLS_EXTRA_UNITTESTS_CLANGD_SYNCAPI_H
 #define LLVM_CLANG_TOOLS_EXTRA_UNITTESTS_CLANGD_SYNCAPI_H
 
@@ -18,11 +22,35 @@
 namespace clang {
 namespace clangd {
 
-Tagged<CompletionList>
+// Calls addDocument and then blockUntilIdleForTest.
+void runAddDocument(ClangdServer &Server, PathRef File, StringRef Contents,
+                    WantDiagnostics WantDiags = WantDiagnostics::Auto);
+
+llvm::Expected<CodeCompleteResult>
 runCodeComplete(ClangdServer &Server, PathRef File, Position Pos,
-                clangd::CodeCompleteOptions Opts,
-                llvm::Optional<StringRef> OverridenContents = llvm::None);
+                clangd::CodeCompleteOptions Opts);
+
+llvm::Expected<SignatureHelp> runSignatureHelp(ClangdServer &Server,
+                                               PathRef File, Position Pos);
+
+llvm::Expected<std::vector<Location>>
+runFindDefinitions(ClangdServer &Server, PathRef File, Position Pos);
+
+llvm::Expected<std::vector<DocumentHighlight>>
+runFindDocumentHighlights(ClangdServer &Server, PathRef File, Position Pos);
+
+llvm::Expected<std::vector<tooling::Replacement>>
+runRename(ClangdServer &Server, PathRef File, Position Pos, StringRef NewName);
+
+std::string runDumpAST(ClangdServer &Server, PathRef File);
+
+llvm::Expected<std::vector<SymbolInformation>>
+runWorkspaceSymbols(ClangdServer &Server, StringRef Query, int Limit);
+
+llvm::Expected<std::vector<SymbolInformation>>
+runDocumentSymbols(ClangdServer &Server, PathRef File);
+
 } // namespace clangd
 } // namespace clang
 
-#endif
+#endif // LLVM_CLANG_TOOLS_EXTRA_UNITTESTS_CLANGD_SYNCAPI_H

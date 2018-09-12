@@ -15,6 +15,7 @@ namespace clang {
 namespace tidy {
 namespace fuchsia {
 
+namespace {
 AST_MATCHER(FunctionDecl, isFuchsiaOverloadedOperator) {
   if (const auto *CXXMethodNode = dyn_cast<CXXMethodDecl>(&Node)) {
     if (CXXMethodNode->isCopyAssignmentOperator() ||
@@ -23,6 +24,7 @@ AST_MATCHER(FunctionDecl, isFuchsiaOverloadedOperator) {
   }
   return Node.isOverloadedOperator();
 }
+} // namespace
 
 void OverloadedOperatorCheck::registerMatchers(MatchFinder *Finder) {
   Finder->addMatcher(functionDecl(isFuchsiaOverloadedOperator()).bind("decl"),
@@ -32,8 +34,8 @@ void OverloadedOperatorCheck::registerMatchers(MatchFinder *Finder) {
 void OverloadedOperatorCheck::check(const MatchFinder::MatchResult &Result) {
   const auto *D = Result.Nodes.getNodeAs<FunctionDecl>("decl");
   assert(D && "No FunctionDecl captured!");
-  
-  SourceLocation Loc = D->getLocStart();
+
+  SourceLocation Loc = D->getBeginLoc();
   if (Loc.isValid())
     diag(Loc, "overloading %0 is disallowed") << D;
 }

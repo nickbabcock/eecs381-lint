@@ -1,11 +1,11 @@
-//===--- Annotations.h - Annotated source code for tests --------*- C++-*-===//
+//===--- Annotations.h - Annotated source code for tests ---------*- C++-*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
-//===---------------------------------------------------------------------===//
+//===----------------------------------------------------------------------===//
 //
 // Annotations lets you mark points and ranges inside source code, for tests:
 //
@@ -27,8 +27,10 @@
 // to define general overlapping ranges.
 //
 //===---------------------------------------------------------------------===//
+
 #ifndef LLVM_CLANG_TOOLS_EXTRA_UNITTESTS_CLANGD_ANNOTATIONS_H
 #define LLVM_CLANG_TOOLS_EXTRA_UNITTESTS_CLANGD_ANNOTATIONS_H
+
 #include "Protocol.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringMap.h"
@@ -58,10 +60,6 @@ public:
   // Returns the location of all ranges marked by [[ ]] (or $name[[ ]]).
   std::vector<Range> ranges(llvm::StringRef Name = "") const;
 
-  // The same to `range` method, but returns range in offsets [start, end).
-  std::pair<std::size_t, std::size_t>
-  offsetRange(llvm::StringRef Name = "") const;
-
 private:
   std::string Code;
   llvm::StringMap<llvm::SmallVector<Position, 1>> Points;
@@ -70,4 +68,5 @@ private:
 
 } // namespace clangd
 } // namespace clang
-#endif
+
+#endif // LLVM_CLANG_TOOLS_EXTRA_UNITTESTS_CLANGD_ANNOTATIONS_H

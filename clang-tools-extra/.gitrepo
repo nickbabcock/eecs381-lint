@@ -6,6 +6,6 @@
 [subrepo]
 	remote = http://llvm.org/git/clang-tools-extra.git
 	branch = master
-	commit = 782d254c7cf0f2916df00e89c93a6545b872e012
-	parent = d7da0892c5c7690abac60cab504930d1d3180b17
+	commit = 9588776f46d26da14c224ffd526ec04bcb3899c2
+	parent = 3945a4cfb9a5b15e38d6e1fc0f9075cd3319cce2
 	cmdver = 0.3.1

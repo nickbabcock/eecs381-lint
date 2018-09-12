@@ -15,18 +15,14 @@
 using namespace clang::ast_matchers;
 
 namespace clang {
-namespace ast_matchers {
-
-const internal::VariadicDynCastAllOfMatcher<Type, DecltypeType> decltypeType;
-
-} // namespace ast_matchers
-
 namespace tidy {
 namespace fuchsia {
 
+namespace {
 AST_MATCHER(FunctionDecl, hasTrailingReturn) {
   return Node.getType()->castAs<FunctionProtoType>()->hasTrailingReturn();
 }
+} // namespace
 
 void TrailingReturnCheck::registerMatchers(MatchFinder *Finder) {
 
@@ -47,7 +43,7 @@ void TrailingReturnCheck::registerMatchers(MatchFinder *Finder) {
 
 void TrailingReturnCheck::check(const MatchFinder::MatchResult &Result) {
   if (const auto *D = Result.Nodes.getNodeAs<Decl>("decl"))
-    diag(D->getLocStart(),
+    diag(D->getBeginLoc(),
          "a trailing return type is disallowed for this type of declaration");
 }
 

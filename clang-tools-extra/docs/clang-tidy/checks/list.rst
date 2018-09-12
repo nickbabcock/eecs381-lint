@@ -4,6 +4,13 @@ Clang-Tidy Checks
 =================
 
 .. toctree::
+   abseil-duration-division
+   abseil-faster-strsplit-delimiter
+   abseil-no-internal-dependencies
+   abseil-no-namespace
+   abseil-redundant-strcat-calls
+   abseil-string-find-startswith
+   abseil-str-cat-append
    android-cloexec-accept
    android-cloexec-accept4
    android-cloexec-creat
@@ -16,23 +23,45 @@ Clang-Tidy Checks
    android-cloexec-memfd-create
    android-cloexec-open
    android-cloexec-socket
+   android-comparison-in-temp-failure-retry
    boost-use-to-string
    bugprone-argument-comment
    bugprone-assert-side-effect
    bugprone-bool-pointer-implicit-conversion
    bugprone-copy-constructor-init
    bugprone-dangling-handle
+   bugprone-exception-escape
    bugprone-fold-init-type
    bugprone-forward-declaration-namespace
+   bugprone-forwarding-reference-overload
    bugprone-inaccurate-erase
    bugprone-incorrect-roundings
    bugprone-integer-division
+   bugprone-lambda-function-name
+   bugprone-macro-parentheses
+   bugprone-macro-repeated-side-effects
    bugprone-misplaced-operator-in-strlen-in-alloc
+   bugprone-misplaced-widening-cast
    bugprone-move-forwarding-reference
    bugprone-multiple-statement-macro
+   bugprone-parent-virtual-call
+   bugprone-sizeof-container
+   bugprone-sizeof-expression
    bugprone-string-constructor
+   bugprone-string-integer-assignment
+   bugprone-string-literal-with-embedded-nul
+   bugprone-suspicious-enum-usage
    bugprone-suspicious-memset-usage
+   bugprone-suspicious-missing-comma
+   bugprone-suspicious-semicolon
+   bugprone-suspicious-string-compare
+   bugprone-swapped-arguments
+   bugprone-terminating-continue
+   bugprone-throw-keyword-missing
    bugprone-undefined-memory-manipulation
+   bugprone-undelegated-constructor
+   bugprone-unused-raii
+   bugprone-unused-return-value
    bugprone-use-after-move
    bugprone-virtual-near-miss
    cert-dcl03-c (redirects to misc-static-assert) <cert-dcl03-c>
@@ -51,11 +80,15 @@ Clang-Tidy Checks
    cert-fio38-c (redirects to misc-non-copyable-objects) <cert-fio38-c>
    cert-flp30-c
    cert-msc30-c (redirects to cert-msc50-cpp) <cert-msc30-c>
+   cert-msc32-c (redirects to cert-msc51-cpp) <cert-msc32-c>
    cert-msc50-cpp
+   cert-msc51-cpp
    cert-oop11-cpp (redirects to performance-move-constructor-init) <cert-oop11-cpp>
    cppcoreguidelines-avoid-goto
+   cppcoreguidelines-avoid-magic-numbers (redirects to readability-magic-numbers) <cppcoreguidelines-avoid-magic-numbers>
    cppcoreguidelines-c-copy-assignment-signature (redirects to misc-unconventional-assign-operator) <cppcoreguidelines-c-copy-assignment-signature>
    cppcoreguidelines-interfaces-global-init
+   cppcoreguidelines-narrowing-conversions
    cppcoreguidelines-no-malloc
    cppcoreguidelines-owning-memory
    cppcoreguidelines-pro-bounds-array-to-pointer-decay
@@ -71,8 +104,10 @@ Clang-Tidy Checks
    cppcoreguidelines-slicing
    cppcoreguidelines-special-member-functions
    fuchsia-default-arguments
+   fuchsia-header-anon-namespaces (redirects to google-build-namespaces) <fuchsia-header-anon-namespaces>
    fuchsia-multiple-inheritance
    fuchsia-overloaded-operator
+   fuchsia-restrict-system-includes
    fuchsia-statically-constructed-objects
    fuchsia-trailing-return
    fuchsia-virtual-inheritance
@@ -88,10 +123,8 @@ Clang-Tidy Checks
    google-readability-casting
    google-readability-function-size (redirects to readability-function-size) <google-readability-function-size>
    google-readability-namespace-comments (redirects to llvm-namespace-comment) <google-readability-namespace-comments>
-   google-readability-redundant-smartptr-get (redirects to readability-redundant-smartptr-get) <google-readability-redundant-smartptr-get>
    google-readability-todo
    google-runtime-int
-   google-runtime-member-string-references
    google-runtime-operator
    google-runtime-references
    hicpp-avoid-goto
@@ -103,6 +136,7 @@ Clang-Tidy Checks
    hicpp-invalid-access-moved (redirects to bugprone-use-after-move) <hicpp-invalid-access-moved>
    hicpp-member-init (redirects to cppcoreguidelines-pro-type-member-init) <hicpp-member-init>
    hicpp-move-const-arg (redirects to performance-move-const-arg) <hicpp-move-const-arg>
+   hicpp-multiway-paths-covered
    hicpp-named-parameter (redirects to readability-named-parameter) <hicpp-named-parameter>
    hicpp-new-delete-operators (redirects to misc-new-delete-overloads) <hicpp-new-delete-operators>
    hicpp-no-array-decay (redirects to cppcoreguidelines-pro-bounds-array-to-pointer-decay) <hicpp-no-array-decay>
@@ -112,7 +146,7 @@ Clang-Tidy Checks
    hicpp-signed-bitwise
    hicpp-special-member-functions (redirects to cppcoreguidelines-special-member-functions) <hicpp-special-member-functions>
    hicpp-static-assert (redirects to misc-static-assert) <hicpp-static-assert>
-   hicpp-undelegated-constructor (redirects to misc-undelegated-constructor) <hicpp-undelegated-constructor>
+   hicpp-undelegated-constructor (redirects to bugprone-undelegated-constructor) <hicpp-undelegated-constructor>
    hicpp-use-auto (redirects to modernize-use-auto) <hicpp-use-auto>
    hicpp-use-emplace (redirects to modernize-use-emplace) <hicpp-use-emplace>
    hicpp-use-equals-default (redirects to modernize-use-equals-default) <hicpp-use-equals-default>
@@ -126,35 +160,20 @@ Clang-Tidy Checks
    llvm-namespace-comment
    llvm-twine-local
    misc-definitions-in-headers
+   misc-eecs-typedef-t
    misc-eecs-bool-define
    misc-eecs-enum-suffix
    misc-eecs-enum-value-caps
-   misc-forwarding-reference-overload
-   misc-lambda-function-name
-   misc-macro-parentheses
-   misc-macro-repeated-side-effects
    misc-misplaced-const
-   misc-misplaced-widening-cast
    misc-new-delete-overloads
    misc-non-copyable-objects
    misc-redundant-expression
-   misc-sizeof-container
-   misc-sizeof-expression
    misc-static-assert
-   misc-string-integer-assignment
-   misc-string-literal-with-embedded-nul
-   misc-suspicious-enum-usage
-   misc-suspicious-missing-comma
-   misc-suspicious-semicolon
-   misc-suspicious-string-compare
-   misc-swapped-arguments
    misc-throw-by-value-catch-by-reference
    misc-unconventional-assign-operator
-   misc-undelegated-constructor
    misc-uniqueptr-reset-release
    misc-unused-alias-decls
    misc-unused-parameters
-   misc-unused-raii
    misc-unused-using-decls
    modernize-avoid-bind
    modernize-deprecated-headers
@@ -179,6 +198,7 @@ Clang-Tidy Checks
    modernize-use-nullptr
    modernize-use-override
    modernize-use-transparent-functors
+   modernize-use-uncaught-exceptions
    modernize-use-using
    mpi-buffer-deref
    mpi-type-mismatch
@@ -198,6 +218,7 @@ Clang-Tidy Checks
    performance-type-promotion-in-math-fn
    performance-unnecessary-copy-initialization
    performance-unnecessary-value-param
+   portability-simd-intrinsics
    readability-avoid-const-params-in-decls
    readability-braces-around-statements
    readability-container-size-empty
@@ -208,6 +229,7 @@ Clang-Tidy Checks
    readability-identifier-naming
    readability-implicit-bool-conversion
    readability-inconsistent-declaration-parameter-name
+   readability-magic-numbers
    readability-misleading-indentation
    readability-misplaced-array-index
    readability-named-parameter
@@ -220,7 +242,9 @@ Clang-Tidy Checks
    readability-redundant-string-cstr
    readability-redundant-string-init
    readability-simplify-boolean-expr
+   readability-simplify-subscript-expr
    readability-static-accessed-through-instance
    readability-static-definition-in-anonymous-namespace
    readability-string-compare
    readability-uniqueptr-delete-release
+   zircon-temporary-objects

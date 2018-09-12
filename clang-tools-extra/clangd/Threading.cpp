@@ -1,4 +1,5 @@
 #include "Threading.h"
+#include "Trace.h"
 #include "llvm/ADT/ScopeExit.h"
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/Threading.h"
@@ -7,15 +8,30 @@
 namespace clang {
 namespace clangd {
 
-CancellationFlag::CancellationFlag()
-    : WasCancelled(std::make_shared<std::atomic<bool>>(false)) {}
+void Notification::notify() {
+  {
+    std::lock_guard<std::mutex> Lock(Mu);
+    Notified = true;
+  }
+  CV.notify_all();
+}
+
+void Notification::wait() const {
+  std::unique_lock<std::mutex> Lock(Mu);
+  CV.wait(Lock, [this] { return Notified; });
+}
 
 Semaphore::Semaphore(std::size_t MaxLocks) : FreeSlots(MaxLocks) {}
 
 void Semaphore::lock() {
-  std::unique_lock<std::mutex> Lock(Mutex);
-  SlotsChanged.wait(Lock, [&]() { return FreeSlots > 0; });
-  --FreeSlots;
+  trace::Span Span("WaitForFreeSemaphoreSlot");
+  // trace::Span can also acquire locks in ctor and dtor, we make sure it
+  // happens when Semaphore's own lock is not held.
+  {
+    std::unique_lock<std::mutex> Lock(Mutex);
+    SlotsChanged.wait(Lock, [&]() { return FreeSlots > 0; });
+    --FreeSlots;
+  }
 }
 
 void Semaphore::unlock() {
@@ -34,7 +50,8 @@ bool AsyncTaskRunner::wait(Deadline D) const {
                       [&] { return InFlightTasks == 0; });
 }
 
-void AsyncTaskRunner::runAsync(UniqueFunction<void()> Action) {
+void AsyncTaskRunner::runAsync(const llvm::Twine &Name,
+                               llvm::unique_function<void()> Action) {
   {
     std::lock_guard<std::mutex> Lock(Mutex);
     ++InFlightTasks;
@@ -51,22 +68,32 @@ void AsyncTaskRunner::runAsync(UniqueFunction<void()> Action) {
   });
 
   std::thread(
-      [](decltype(Action) Action, decltype(CleanupTask)) {
+      [](std::string Name, decltype(Action) Action, decltype(CleanupTask)) {
+        llvm::set_thread_name(Name);
         Action();
         // Make sure function stored by Action is destroyed before CleanupTask
         // is run.
         Action = nullptr;
       },
-      std::move(Action), std::move(CleanupTask))
+      Name.str(), std::move(Action), std::move(CleanupTask))
       .detach();
 }
 
 Deadline timeoutSeconds(llvm::Optional<double> Seconds) {
   using namespace std::chrono;
   if (!Seconds)
-    return llvm::None;
+    return Deadline::infinity();
   return steady_clock::now() +
          duration_cast<steady_clock::duration>(duration<double>(*Seconds));
+}
+
+void wait(std::unique_lock<std::mutex> &Lock, std::condition_variable &CV,
+          Deadline D) {
+  if (D == Deadline::zero())
+    return;
+  if (D == Deadline::infinity())
+    return CV.wait(Lock);
+  CV.wait_until(Lock, D.time());
 }
 
 } // namespace clangd

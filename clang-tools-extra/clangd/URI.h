@@ -45,6 +45,11 @@ public:
   static llvm::Expected<URI> create(llvm::StringRef AbsolutePath,
                                     llvm::StringRef Scheme);
 
+  // Similar to above except this uses the first scheme in \p Schemes that
+  // works.
+  static llvm::Expected<URI> create(llvm::StringRef AbsolutePath,
+                                    const std::vector<std::string> &Schemes);
+
   /// This creates a file:// URI for \p AbsolutePath. The path must be absolute.
   static URI createFile(llvm::StringRef AbsolutePath);
 
@@ -59,6 +64,16 @@ public:
   /// which can help disambiguate when the same file exists in many workspaces.
   static llvm::Expected<std::string> resolve(const URI &U,
                                              llvm::StringRef HintPath = "");
+
+  /// Gets the preferred spelling of this file for #include, if there is one,
+  /// e.g. <system_header.h>, "path/to/x.h".
+  ///
+  /// This allows URI schemas to provide their customized include paths.
+  ///
+  /// Returns an empty string if normal include-shortening based on the absolute
+  /// path should be used.
+  /// Fails if the URI is not valid in the schema.
+  static llvm::Expected<std::string> includeSpelling(const URI &U);
 
   friend bool operator==(const URI &LHS, const URI &RHS) {
     return std::tie(LHS.Scheme, LHS.Authority, LHS.Body) ==
@@ -94,6 +109,12 @@ public:
 
   virtual llvm::Expected<URI>
   uriFromAbsolutePath(llvm::StringRef AbsolutePath) const = 0;
+
+  /// Returns the include path of the file (e.g. <path>, "path"), which can be
+  /// #included directly. See URI::includeSpelling for details.
+  virtual llvm::Expected<std::string> getIncludeSpelling(const URI &U) const {
+    return ""; // no customized include path for this scheme.
+  }
 };
 
 /// By default, a "file" scheme is supported where URI paths are always absolute
